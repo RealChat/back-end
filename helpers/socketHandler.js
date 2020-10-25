@@ -1,3 +1,4 @@
+const MessageController = require("../controllers/MessageController");
 const UserController = require("../controllers/UserController");
 
 class SocketHandler {
@@ -12,13 +13,10 @@ class SocketHandler {
             socket.on("join", this.onJoin.bind(this, socket));
             socket.on("message", this.onMessage.bind(this, socket));
             socket.on("disconnect", this.onLeave.bind(this, socket));
-            console.log("New connection:", socket.id);
         });
     }
     async onJoin(socket, data) {
         this.users[data._id] = socket.id;
-
-        console.log("New user:", data);
 
         const exists = this.activeUsers.find((u) => u._id == data._id);
         if (!exists) {
@@ -29,26 +27,39 @@ class SocketHandler {
             ...user._doc,
             online: !!this.activeUsers.find((u) => u._id == user._id),
         }));
-        console.log(allusers[0]._id.toString(), data._id);
+        // send the list of all users to the freshly joined user
         this.io.to(socket.id).emit(
             "allUsers",
             allusers.filter((u) => u._id.toString() !== data._id)
         );
+        // give alert to everybody about new user
+        socket.broadcast.emit("newUser", data._id);
+        // send all the group messages
+        this.io
+            .to(socket.id)
+            .emit("groupChats", await MessageController.getAllMessages());
     }
-    getUserBySocket(socketId) {
+    getUserBySocketId(socketId) {
         const user = [...Object.entries(this.users)].find(
             (user) => user[1] == socketId
         );
-        if(user)
-        return this.activeUsers.find((u) => u._id == user[0]);
-        else return null
+        if (user) return this.activeUsers.find((u) => u._id == user[0]);
+        else return null;
     }
     onMessage(socket, data) {
-        console.log(data);
-        socket.to(this.users[data.to]).emit("receiveMessage", {
-            text: data.text,
-            from: this.getUserBySocket(socket.id)._id,
-        });
+        if (data.to == "groupChat") {
+            const user = this.getUserBySocketId(socket.id);
+            socket.broadcast.emit("receiveMessage", {
+                text: data.text,
+                sender: user.username,
+            });
+            MessageController.store(data.text, user.username);
+        } else {
+            socket.to(this.users[data.to]).emit("receiveMessage", {
+                text: data.text,
+                from: this.getUserBySocketId(socket.id)._id,
+            });
+        }
     }
     onLeave(socket) {
         console.log(socket.id, "left");
@@ -56,11 +67,11 @@ class SocketHandler {
             (user) => user[1] == socket.id
         );
         if (!userLeft) return;
-        this.users[userLeft[0]] = undefined;
         this.activeUsers = this.activeUsers.filter(
             (user) => user._id !== userLeft[0]
         );
-        console.log(this.activeUsers);
+        socket.broadcast.emit("userLeft", userLeft[0]);
+        this.users[userLeft[0]] = undefined;
     }
 }
 
