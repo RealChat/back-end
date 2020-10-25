@@ -1,5 +1,6 @@
 const express = require("express")
 const cors = require("cors")
+const path = require('path')
 const User = require("./models/user")
 require("./config/mongo")
 const { users } = require("./mocks/users")
@@ -12,13 +13,16 @@ const socketIO = require("socket.io")
 
 const app = express()
 
+app.use(express.static('public'))
+
+
 app.use(cors())
 app.use(express.json())
 
 app.use("/auth",authHandler)
 
-app.get("/",(req,res)=>{
-    res.send("Hello World")
+app.get("*",(req,res)=>{
+    res.sendFile(path.join(__dirname,'public','index.html'));
 })
 
 
