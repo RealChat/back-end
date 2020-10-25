@@ -5,7 +5,7 @@ require("./config/mongo")
 const { users } = require("./mocks/users")
 const authHandler = require("./routes/auth")
 const SocketHandler = require("./helpers/socketHandler")
-const PORT = 9008
+const PORT = process.env.PORT || 9008
 
 const http = require("http");
 const socketIO = require("socket.io")
